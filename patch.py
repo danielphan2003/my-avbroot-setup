@@ -74,6 +74,8 @@ def patch_ota(
     key_ota: SigningKey,
     cert_ota: Path,
     replace: dict[str, Path],
+    magisk: Path | None = None,
+    magisk_preinit_device: str | None = None,
 ):
     image_names = ', '.join(sorted(replace.keys()))
     status(f'Patching OTA with replaced images: {image_names}: {output_ota}')
@@ -85,8 +87,15 @@ def patch_ota(
         '--key-avb', key_avb.key,
         '--key-ota', key_ota.key,
         '--cert-ota', cert_ota,
-        '--rootless',
     ]
+
+    if magisk and magisk_preinit_device:
+        cmd.append('--magisk')
+        cmd.append(magisk)
+        cmd.append('--magisk-preinit-device')
+        cmd.append(magisk_preinit_device)
+    else:
+        cmd.append('--rootless')
 
     if key_avb.pass_env is not None:
         cmd.append('--pass-avb-env-var')
@@ -775,6 +784,45 @@ def inject_alterinstaller(
         contexts,
     )
 
+def inject_card_emulator_pro(
+    module_zip: Path,
+    module_apk: Path | None,
+    entries: list,
+    tree: Path,
+    contexts: Contexts,
+    vendor_entries: list,
+    vendor_tree: Path,
+    vendor_contexts: Contexts,
+):
+    if module_apk is not None:
+        status(f'Injecting Card Emulator Pro apk: {module_apk}')
+
+        path = 'system/priv-app/com.yuanwofei.cardemulator.pro/base.apk'
+        add_file_entry(entries, contexts, f'/{path}', 0o644)
+        tree_path = tree / path
+        tree_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(module_apk, tree_path)
+
+    status(f'Injecting Card Emulator Pro module: {module_zip}')
+
+    with zipfile.ZipFile(module_zip, 'r') as z:
+        for path in z.namelist():
+            # Only config file are copied over
+            if (not path.startswith('system/vendor') or not path.startswith('vendor')) and not path.endswith('.conf'):
+                continue
+
+            # Remove system prefix, since modules are used to systemless modification and /system/vendor is a symlink to /vendor
+            conf = path.removeprefix('system/').removeprefix('vendor/')
+
+            # Add to filesystem entries if not exists
+            if not any(e['path'] == f'/{conf}' for e in vendor_entries):
+                add_file_entry(vendor_entries, vendor_contexts, f'/{conf}', 0o644)
+
+            # Extract file contents.
+            vendor_tree_path = vendor_tree / conf
+            vendor_tree_path.parent.mkdir(parents=True, exist_ok=True)
+            zip_extract(z, path, vendor_tree_path)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -875,6 +923,46 @@ def parse_args():
         help='AlterInstaller module zip signature',
     )
     parser.add_argument(
+        '--module-card-emulator-pro',
+        type=Path,
+        help='Card Emulator Pro module zip',
+    )
+    parser.add_argument(
+        '--module-card-emulator-pro-apk',
+        type=Path,
+        help='Card Emulator Pro apk',
+    )
+    parser.add_argument(
+        '--kernel-boot',
+        type=Path,
+        help='Custom boot image to include',
+    )
+    parser.add_argument(
+        '--kernel-init-boot',
+        type=Path,
+        help='Custom init_boot image to include',
+    )
+    parser.add_argument(
+        '--kernel-vendor-kernel-boot',
+        type=Path,
+        help='Custom vendor kernel boot image to include',
+    )
+    parser.add_argument(
+        '--kernel-dtbo',
+        type=Path,
+        help='Custom dtbo image to include',
+    )
+    parser.add_argument(
+        '--magisk',
+        type=Path,
+        help='Magisk apk to patch boot image',
+    )
+    parser.add_argument(
+        '--magisk-preinit-device',
+        type=str,
+        help='Magisk preinit device',
+    )
+    parser.add_argument(
         '--debug-shell',
         action='store_true',
         help='Spawn a debug shell before cleaning up temporary directory',
@@ -943,6 +1031,7 @@ def run(args: argparse.Namespace, temp_dir: Path):
     vendor_image = images_dir / 'vendor.img'
     vendor_dir = temp_dir / 'vendor'
     vendor_raw = vendor_dir / 'raw.img'
+    vendor_metadata = vendor_dir / 'fs_metadata.toml'
     vendor_tree = vendor_dir / 'fs_tree'
 
     vendor_boot_image = images_dir / 'vendor_boot.img'
@@ -972,6 +1061,12 @@ def run(args: argparse.Namespace, temp_dir: Path):
     vendor_dir.mkdir()
     unpack_avb(vendor_image, vendor_dir)
     unpack_fs(vendor_raw, vendor_dir)
+    with open(vendor_metadata, 'rb') as f:
+        vendor_fs_info = tomlkit.load(f)
+
+    # Parse SELinux label mappings for use when creating new entries.
+    vendor_contexts = load_file_contexts(
+        vendor_tree / 'etc' / 'selinux' / 'vendor_file_contexts')
 
     # Unpack vendor_boot image.
     vendor_boot_dir.mkdir()
@@ -1026,6 +1121,19 @@ def run(args: argparse.Namespace, temp_dir: Path):
         system_tree,
         system_contexts,
     )
+    if not args.module_card_emulator_pro is None:
+        inject_card_emulator_pro(
+            args.module_card_emulator_pro,
+            args.module_card_emulator_pro_apk,
+            # args.module_card_emulator_pro_sig,
+            system_fs_info['entries'],
+            system_tree,
+            system_contexts,
+            vendor_fs_info['entries'],
+            vendor_tree,
+            vendor_contexts,
+        )
+
 
     # Repack system image.
     with open(system_metadata, 'w') as f:
@@ -1042,6 +1150,16 @@ def run(args: argparse.Namespace, temp_dir: Path):
     pack_boot(vendor_boot_raw, vendor_boot_dir)
     pack_avb(vendor_boot_image, vendor_boot_dir, sign_key_avb, False)
 
+    optional_replace = {}
+    if args.kernel_boot:
+        optional_replace |= { 'boot': args.kernel_boot }
+    if args.kernel_init_boot:
+        optional_replace |= { 'init_boot': args.kernel_init_boot }
+    if args.kernel_vendor_kernel_boot:
+        optional_replace |= { 'vendor_kernel_boot': args.kernel_vendor_kernel_boot }
+    if args.kernel_dtbo:
+        optional_replace |= { 'dtbo': args.kernel_dtbo }
+
     # Patch OTA.
     patch_ota(
         args.input,
@@ -1053,7 +1171,9 @@ def run(args: argparse.Namespace, temp_dir: Path):
             'system': system_image,
             'vendor': vendor_image,
             'vendor_boot': vendor_boot_image,
-        },
+        } | optional_replace,
+        args.magisk,
+        args.magisk_preinit_device
     )
 
     # Generate Custota csig.

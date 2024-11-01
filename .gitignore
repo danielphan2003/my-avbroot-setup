@@ -1,0 +1,14 @@
+ota/*
+extracted/*
+magisk/*
+kernel/*
+module/*
+original/*
+.env
+*.img
+*.crt
+*.key
+*.apk
+*.zip
+*.patched
+*.bin

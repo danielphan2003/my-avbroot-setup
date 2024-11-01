@@ -1,3 +1,7 @@
+### NOTICE
+
+I'm rewriting docs. Most of `patch.py` functions the same as https://github.com/chenxiaolong/my-avbroot-setup, but please read `patch.py` and `*.sh` before you run any commands here.
+
 # My avbroot setup
 
 This repo describes my personal setup for modifying the OS on my Android devices.
