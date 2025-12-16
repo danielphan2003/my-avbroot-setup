@@ -185,7 +185,8 @@ if [[ -f "$KERNEL_ZIP" ]]; then
         KERNEL_VENDOR_KERNEL_BOOT=true
     fi
 elif [[ "$KSU_MODE" = gki ]]; then
-    log WARN "Kernel zip not provided for KernelSU GKI mode"
+    log ERROR "Kernel zip not provided for KernelSU GKI mode"
+    exit 1
 fi
 
 sign_image() {
@@ -205,8 +206,8 @@ sign_image() {
             log INFO "Patching KernelSU for $block raw image"
             ksud boot-patch \
                 --boot raw.img \
-                --module "$HOME/Downloads/android13-5.10_kernelsu.ko" \
-                --kmi android13-5.10 \
+                --module "$HOME/Downloads/android14-6.1_kernelsu.ko" \
+                --kmi android14-6.1 \
                 --out "$KSU_TMP"
             cp -v "$(realpath $KSU_TMP/kernelsu_patched_*.img)" raw.img
         fi

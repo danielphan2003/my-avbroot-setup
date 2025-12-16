@@ -6,4 +6,6 @@ KERNEL_OUT="$HOME/src/github.com/kerneltoast/android_kernel_google_gs201/out/arc
     --input "$1" \
     --kernel-boot "$KERNEL_OUT/Image" \
     --kernel-dtbo "$KERNEL_OUT/dts/google/dtbo.img" \
+    --ksu-block init_boot \
+    --ksu-mode lkm \
     "${@:2}"

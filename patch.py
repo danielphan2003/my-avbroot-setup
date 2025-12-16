@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import tomlkit
+import traceback
 from typing import assert_never, Iterable, Match, Pattern, Tuple
 import zipfile
 
@@ -512,18 +513,15 @@ def inject_custota(
                 '--target', sepolicy,
             ])
 
-    seapp = tree / 'system' / 'etc' / 'selinux' / 'plat_seapp_contexts'
-    status(f'Adding Custota seapp context: {seapp}')
+        seapp = tree / 'system' / 'etc' / 'selinux' / 'plat_seapp_contexts'
+        status(f'Adding Custota seapp context: {seapp}')
 
-    with open(seapp, 'a') as f_temp:
-        f_temp.write(
-            'user=_app '
-            'isPrivApp=true '
-            'name=com.chiller3.custota '
-            'domain=custota_app '
-            'type=app_data_file '
-            'levelFrom=all\n'
-        )
+        with (
+            z.open('plat_seapp_contexts', 'r') as f_in,
+            open(seapp, 'ab') as f_out,
+        ):
+            shutil.copyfileobj(f_in, f_out)
+            f_out.write(b'\n')
 
 
 def inject_msd(
@@ -585,18 +583,14 @@ def inject_msd(
                 '--target', sepolicy,
             ])
 
-    seapp = tree / 'system' / 'etc' / 'selinux' / 'plat_seapp_contexts'
-    status(f'Adding MSD seapp context: {seapp}')
-
-    with open(seapp, 'a') as f_temp:
-        f_temp.write(
-            'user=_app '
-            'isPrivApp=true '
-            'name=com.chiller3.msd '
-            'domain=msd_app '
-            'type=app_data_file '
-            'levelFrom=all\n'
-        )
+        seapp = tree / 'system' / 'etc' / 'selinux' / 'plat_seapp_contexts'
+        status(f'Adding MSD seapp context: {seapp}')
+        with (
+            z.open('plat_seapp_contexts', 'r') as f_in,
+            open(seapp, 'ab') as f_out,
+        ):
+            shutil.copyfileobj(f_in, f_out)
+            f_out.write(b'\n')
 
     add_init_script(
         InitScript(
@@ -1189,14 +1183,25 @@ def main():
     args = parse_args()
 
     with tempfile.TemporaryDirectory() as temp_dir:
+        exit_code = 0
+
         try:
             run(args, Path(temp_dir))
-        finally:
-            if args.debug_shell:
-                shell = os.getenv('SHELL', 'bash')
-                status(f'Debug shell: {shell}')
-                subprocess.run([shell], cwd=temp_dir)
+        except Exception as e:
+            # Use default printer for pretty colors on Python 3.13.
+            if hasattr(traceback, '_print_exception_bltin'):
+                traceback._print_exception_bltin(e)
+            else:
+                traceback.print_exception(e)
 
+            exit_code = 1
+
+        if args.debug_shell:
+            shell = os.getenv('SHELL', 'bash')
+            status(f'Debug shell: {shell}')
+            subprocess.run([shell], cwd=temp_dir)
+
+        exit(exit_code)
 
 if __name__ == '__main__':
     main()
