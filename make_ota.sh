@@ -114,6 +114,14 @@ if [[ ! -f "$INPUT" ]]; then
     exit 1
 fi
 
+if [[ ! -d "$EXTRACT_DIR" ]]; then
+    mkdir -p "$EXTRACT_DIR" || {
+	log ERROR "Invalid extract dir: $EXTRACT_DIR (not a directory)"
+        exit 1
+    }
+    log INFO "Created extract dir: $EXTRACT_DIR"
+fi
+
 if [[ -f "$MAGISK" ]] && [[ -n "$MAGISK_PREINIT_DEVICE" ]]; then
     log INFO "Using magisk ($MAGISK), preinit device ($MAGISK_PREINIT_DEVICE)"
 
