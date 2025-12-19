@@ -25,7 +25,7 @@ This repo includes the script I use for modifying Android OTAs. Folks should pro
 * [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot) (>= version 1.1)
 * [AlterInstaller](https://github.com/chenxiaolong/AlterInstaller) (>= version 2.0)
 
-The `avbroot`, `afsr`, and `custota-tool` commands must exist in `PATH`.
+The `avbroot`, `afsr`, `bc`, and `custota-tool` commands must exist in `PATH`.
 
 ## Usage
 
