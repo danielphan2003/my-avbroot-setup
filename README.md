@@ -15,6 +15,7 @@ This repo includes the script I use for modifying Android OTAs. Folks should pro
 * Linux
     * Needed for running a statically-linked Android executable
 * python3
+* bc
 * [python3-tomlkit](https://pypi.org/project/tomlkit/)
 * [avbroot](https://github.com/chenxiaolong/avbroot) (>= version 3.3.0)
 * [afsr](https://github.com/chenxiaolong/afsr) (>= commit adcae036b68684828edf5eb90be1500abd5cf491)
