@@ -4,6 +4,7 @@ magisk/*
 kernel/*
 module/*
 original/*
+device/*
 .env
 *.img
 *.crt
@@ -12,3 +13,5 @@ original/*
 *.zip
 *.patched
 *.bin
+__pycache__/
+node_modules/
