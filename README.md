@@ -12,22 +12,90 @@ This repo includes the script I use for modifying Android OTAs. Folks should pro
 
 ## Requirements
 
-* Linux
-    * Needed for running a statically-linked Android executable
+* Host must run Linux **or** an Android device must be connected via `adb`
+    * Needed for running statically-linked Android executables used for SELinux patching
 * python3
-* bc
-* [python3-tomlkit](https://pypi.org/project/tomlkit/)
-* [avbroot](https://github.com/chenxiaolong/avbroot) (>= version 3.3.0)
-* [afsr](https://github.com/chenxiaolong/afsr) (>= commit adcae036b68684828edf5eb90be1500abd5cf491)
-* [Custota](https://github.com/chenxiaolong/Custota) (>= version 4.5)
-* [MSD](https://github.com/chenxiaolong/MSD)
+* [avbroot](https://github.com/chenxiaolong/avbroot) (>= version 3.12.0)
+* [afsr](https://github.com/chenxiaolong/afsr) (>= version 2.0.0)
+* [Custota](https://github.com/chenxiaolong/Custota) (>= version 5.2)
+* [MSD](https://github.com/chenxiaolong/MSD) (>= version 1.8)
 * [BCR](https://github.com/chenxiaolong/BCR) (>= version 1.65)
 * [OEMUnlockOnBoot](https://github.com/chenxiaolong/OEMUnlockOnBoot) (>= version 1.1)
 * [AlterInstaller](https://github.com/chenxiaolong/AlterInstaller) (>= version 2.0)
 
-The `avbroot`, `afsr`, `bc`, and `custota-tool` commands must exist in `PATH`.
+The `avbroot`, `afsr`, `custota-tool`, and, when using KernelSU LKM mode, `ksud` commands must exist in `PATH`.
+Set `GH_TOKEN` if you want authenticated GitHub API requests when `make_ota.py` downloads official modules.
 
 ## Usage
+
+Install the required Python dependencies. This can also be done inside a venv or by installing the packages from your Linux distro's package manager.
+
+```bash
+pip install -r requirements.txt
+```
+
+The high-level CLI handles extracting verification material, downloading the official modules, preparing optional kernel/Magisk/KernelSU images, and then invoking `patch.py`:
+
+```bash
+PASS_AVB_ENV_VAR=... PASS_OTA_ENV_VAR=... \
+python3 make_ota.py \
+    --device caiman \
+    --input ota.zip \
+    --modules custota,msd,bcr,oemunlockonboot,alterinstaller,tce \
+    --module-tce TCE-<version>-release.zip
+```
+
+If `--modules` is omitted, all official modules are included. Use a
+comma-separated allowlist to select only the modules to inject.
+
+By default, `make_ota.py` expects keys at:
+
+```text
+device/<device>/avb.key
+device/<device>/ota.key
+device/<device>/ota.crt
+```
+
+The output path defaults to:
+
+```text
+ota/<device>/<input-basename>.<timestamp>[.magisk][.custom_kernel|.ksu_gki][.ksu_lkm].zip
+```
+
+### Fedora toolbox (supercomputer)
+
+supercomputer runs Fedora Kinoite, so the tools live in a toolbox instead of
+on the host. `avbroot`, `afsr`, `custota-tool` and `dufs` come from depot
+(`https://pkgs.c-137.me/fedora/$releasever/$basearch`); add its repository
+inside the toolbox the way factory's `docs/depot.md` describes, then:
+
+```bash
+toolbox create avbroot
+toolbox run -c avbroot sudo dnf -y install avbroot afsr custota-tool dufs \
+    python3-pydantic python3-tomlkit unzip
+```
+
+Keys go in `device/<device>/`, and `.env` holds `PASS_AVB_ENV_VAR`,
+`PASS_OTA_ENV_VAR`, `GH_TOKEN` and `TCE_MODULE`. Both are gitignored and stay
+on the machine (mode 600). Build with:
+
+```bash
+toolbox run -c avbroot bash -c 'set -a; . ./.env; set +a; ./caiman_gos.sh original/<ota>.zip'
+```
+
+Existing preset wrappers remain available:
+
+```bash
+./caiman_gos.sh ota.zip
+./caiman_gos_magisk.sh ota.zip Magisk.apk
+./panther_magisk.sh ota.zip Magisk.apk
+./panther_sultan.sh ota.zip
+./panther_sultan_ksu_lkm.sh ota.zip
+./panther_ksu_lkm.sh ota.zip
+./panther_ksu_gki.sh ota.zip AnyKernel3.zip
+```
+
+For lower-level use, call `patch.py` directly with explicit module paths:
 
 ```bash
 python3 patch.py \
@@ -41,7 +109,8 @@ python3 patch.py \
     --module-msd MSD-<version>-release.zip \
     --module-bcr BCR-<version>-release.zip \
     --module-oemunlockonboot OEMUnlockOnBoot-<version>-release.zip \
-    --module-alterinstaller AlterInstaller-<version>-release.zip
+    --module-alterinstaller AlterInstaller-<version>-release.zip \
+    --module-tce TCE-<version>-release.zip
 ```
 
 This will:
